@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, ChevronRight, AlertCircle, Users } from 'lucide-react';
+import { Plus, Search, ChevronRight, AlertCircle, Users, Check, X, UserPlus } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,7 @@ import { MemberPicker } from '@/components/ui/member-picker';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { useSprint } from '@/lib/hooks/use-projects';
 import { useSprintTasks, useCreateTask, taskKeys } from '@/lib/hooks/use-tasks';
-import { tasksApi, sprintMembersApi } from '@/lib/api';
+import { tasksApi, sprintMembersApi, staffApi } from '@/lib/api';
 import { formatDate, extractError } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import type { Task, TaskStatus, TaskPriority } from '@/types';
@@ -138,6 +138,9 @@ export default function SprintTasksPage() {
   const qc = useQueryClient();
 
   const [showCreate, setShowCreate] = useState(false);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [assigneeSearch, setAssigneeSearch] = useState('');
+  const [showAssigneePicker, setShowAssigneePicker] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<TaskStatus | ''>('');
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority | ''>('');
@@ -152,7 +155,7 @@ export default function SprintTasksPage() {
     priority: priorityFilter || undefined,
   });
 
-  const sprint = sprintRes?.data;
+  const sprint = sprintRes;
 
   const membersKey = ['sprint-members', sprintId];
   const { data: membersData } = useQuery({
@@ -169,6 +172,15 @@ export default function SprintTasksPage() {
   const handleRemoveMember = async (userId: string) => {
     await sprintMembersApi.remove(projectId, sprintId, userId);
   };
+  const { data: staffData } = useQuery({
+    queryKey: ['staff-picker', companyId],
+    queryFn: () => staffApi.list(companyId, { status: 'active', limit: 100 } as any).then((r) => r.data),
+    enabled: showCreate && !!companyId && isAdmin,
+  });
+  const staffList = (staffData?.data ?? []).filter(
+    (s: any) => s.user && s.user.fullName?.toLowerCase().includes(assigneeSearch.toLowerCase()),
+  );
+
   const createTask = useCreateTask(sprintId);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
@@ -191,7 +203,10 @@ export default function SprintTasksPage() {
   };
 
   const onSubmit = (d: FormData) => {
-    createTask.mutate(d, { onSuccess: () => { setShowCreate(false); reset(); } });
+    createTask.mutate(
+      { ...d, assigneeIds: assigneeIds.length ? assigneeIds : undefined },
+      { onSuccess: () => { setShowCreate(false); reset(); setAssigneeIds([]); setAssigneeSearch(''); setShowAssigneePicker(false); } },
+    );
   };
 
   const total      = tasks.length;
@@ -419,8 +434,92 @@ export default function SprintTasksPage() {
             <Input label="Planned hours" type="number" min="0" step="0.5" placeholder="0" {...register('plannedEffortPh')} />
             <Input label="Estimated hours" type="number" min="0" step="0.5" placeholder="0" {...register('estimatedEffortPh')} />
           </div>
+
+          {isAdmin && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Assignees <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+
+              {/* Selected chips */}
+              {assigneeIds.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {assigneeIds.map((id) => {
+                    const s = staffList.find((s: any) => s.user?.id === id);
+                    const name = s?.user?.fullName ?? id;
+                    return (
+                      <span key={id} className="flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                        {name}
+                        <button type="button" onClick={() => setAssigneeIds((p) => p.filter((i) => i !== id))}>
+                          <X className="h-3 w-3 text-gray-400 hover:text-red-500" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+
+              {!showAssigneePicker ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAssigneePicker(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-dashed border-gray-200 px-3 py-1.5 text-xs text-gray-400 hover:border-gray-300 hover:text-gray-600 hover:bg-gray-50 transition-colors w-full"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  {assigneeIds.length === 0 ? 'Assign team members' : 'Add more'}
+                </button>
+              ) : (
+                <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-2 p-2 border-b border-gray-100">
+                    <Search className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                    <input
+                      autoFocus
+                      value={assigneeSearch}
+                      onChange={(e) => setAssigneeSearch(e.target.value)}
+                      placeholder="Search staff…"
+                      className="flex-1 text-sm outline-none"
+                    />
+                    <button type="button" onClick={() => { setShowAssigneePicker(false); setAssigneeSearch(''); }}>
+                      <X className="h-4 w-4 text-gray-400 hover:text-gray-700" />
+                    </button>
+                  </div>
+                  <ul className="max-h-36 overflow-y-auto">
+                    {staffList.length === 0 && (
+                      <li className="px-3 py-2 text-xs text-gray-400 text-center">No active staff found</li>
+                    )}
+                    {staffList.map((s: any) => {
+                      const uid = s.user?.id;
+                      const selected = uid && assigneeIds.includes(uid);
+                      return (
+                        <li key={s.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!uid) return;
+                              setAssigneeIds((p) => selected ? p.filter((i) => i !== uid) : [...p, uid]);
+                            }}
+                            className="flex w-full items-center gap-2.5 px-3 py-2 hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="h-5 w-5 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 shrink-0">
+                              {s.user?.fullName?.[0] ?? '?'}
+                            </div>
+                            <div className="flex-1 min-w-0 text-left">
+                              <p className="text-xs font-medium text-gray-800 truncate">{s.user?.fullName ?? s.email}</p>
+                              {s.designation && <p className="text-xs text-gray-400 truncate">{s.designation}</p>}
+                            </div>
+                            {selected && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-2 justify-end pt-1">
-            <Button variant="outline" type="button" onClick={() => { setShowCreate(false); reset(); }}>Cancel</Button>
+            <Button variant="outline" type="button" onClick={() => { setShowCreate(false); reset(); setAssigneeIds([]); setAssigneeSearch(''); setShowAssigneePicker(false); }}>Cancel</Button>
             <Button type="submit" loading={createTask.isPending}>Create task</Button>
           </div>
         </form>

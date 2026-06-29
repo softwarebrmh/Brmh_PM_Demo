@@ -80,7 +80,7 @@ export default function ProjectDetailPage() {
     createSprint.mutate(d, { onSuccess: () => { setShowCreate(false); reset(); } });
   };
 
-  const project = projectRes?.data;
+  const project = projectRes;
 
   if (projectLoading || sprintsLoading) return <PageSpinner />;
 

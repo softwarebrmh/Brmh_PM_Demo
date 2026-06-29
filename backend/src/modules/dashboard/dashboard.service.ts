@@ -148,6 +148,8 @@ export class DashboardService {
         activeSprints: myActiveSprints.map((s) => ({
           id: s.id,
           name: s.name,
+          goal: s.goal,
+          status: s.status,
           project: s.project,
           startDate: s.startDate,
           endDate: s.endDate,

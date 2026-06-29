@@ -37,18 +37,15 @@ export default function ProjectsPage() {
   const [showArchived, setShowArchived] = useState(false);
 
   const { data, isLoading } = useProjects(companyId);
-  const createProject = useCreateProject();
-  const archiveProject = useArchiveProject();
+  const createProject = useCreateProject(companyId);
+  const archiveProject = useArchiveProject(companyId);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
 
   const onSubmit = (d: FormData) => {
-    createProject.mutate(
-      { ...d, companyId },
-      { onSuccess: () => { setShowCreate(false); reset(); } },
-    );
+    createProject.mutate(d, { onSuccess: () => { setShowCreate(false); reset(); } });
   };
 
   const projects = data?.data ?? [];

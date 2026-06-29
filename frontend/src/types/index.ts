@@ -239,10 +239,30 @@ export interface AdminDashboard {
   recentActivity: ActivityItem[];
 }
 
+export interface DashboardSprint {
+  id: string;
+  name: string;
+  goal?: string | null;
+  status: SprintStatus;
+  startDate?: string | null;
+  endDate?: string | null;
+  taskCount: number;
+  project?: { id: string; name: string } | null;
+}
+
+export interface DashboardTask {
+  id: string;
+  name: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  plannedDueDate?: string | null;
+  sprint?: { id: string; name: string; projectId: string } | null;
+}
+
 export interface StaffDashboard {
   myTasks: TaskStatusBreakdown;
-  upcomingTasks: Task[];
-  activeSprints: Sprint[];
+  upcomingTasks: DashboardTask[];
+  activeSprints: DashboardSprint[];
   recentActivity: ActivityItem[];
 }
 
